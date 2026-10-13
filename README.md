@@ -18,22 +18,29 @@ Open this project folder in VS Code. In **Terminal > New Terminal**, run:
 npm install
 ```
 
-This installs Express, Mongoose, and dotenv from `package.json`.
+This installs Express, Mongoose, dotenv, and jsonwebtoken from `package.json`.
 
-The included `.env` is configured for a local MongoDB server and the `notesdb` database:
+Configure `.env` for MongoDB and authentication. If `.env` is missing, copy the example:
 
 ```dotenv
 MONGODB_URI=mongodb://127.0.0.1:27017/notesdb
 PORT=3000
+JWT_SECRET=<a-long-random-secret>
+AUTH_USERNAME=<your-login-name>
+AUTH_PASSWORD=<your-strong-password>
 ```
-
-If `.env` is missing, copy the example before starting:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-`.env` is excluded from Git. Keep real usernames, passwords, and Atlas connection strings in `.env`; never put credentials in source files or commit `.env`.
+Generate a strong JWT secret with Node.js:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Set the generated value and your chosen login credentials in `.env`. `.env` is excluded from Git. Keep real usernames, passwords, JWT secrets, and Atlas connection strings there; never put credentials in source files or commit `.env`.
 
 ### Use MongoDB locally
 
@@ -85,9 +92,37 @@ npm run check
 
 ## API reference
 
-All endpoints use the `/api/notes` path and accept/return JSON. In Postman, set the request header `Content-Type` to `application/json` for requests with a body. Notes include `createdAt` and `updatedAt` timestamps.
+Notes endpoints use the `/api/notes` path and accept/return JSON. In Postman, set the request header `Content-Type` to `application/json` for requests with a body. Notes include `createdAt` and `updatedAt` timestamps.
 
 Successful responses use `{ "success": true, "data": ... }`. Errors use `{ "success": false, "message": "..." }`.
+
+### Authentication
+
+The project uses the single login configured by `AUTH_USERNAME` and `AUTH_PASSWORD` in `.env`; it does not store user accounts in MongoDB. Request a JWT with:
+
+`POST http://localhost:3000/api/auth/login`
+
+```json
+{
+  "username": "your-login-name",
+  "password": "your-strong-password"
+}
+```
+
+A successful login returns a signed bearer token that expires after one hour:
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "<jwt>",
+    "tokenType": "Bearer",
+    "expiresIn": "1h"
+  }
+}
+```
+
+Send it on **every** `/api/notes` request using `Authorization: Bearer <token>`. Missing, malformed, invalid, or expired tokens return `401 Unauthorized`. Keep `JWT_SECRET` private; changing it invalidates previously issued tokens.
 
 ### Create a note
 
@@ -190,11 +225,13 @@ Invalid IDs return `400 Bad Request`; valid IDs for notes that do not exist retu
 
 ## Test with Postman
 
-1. Start MongoDB (locally or through Atlas) and start the API with `npm start`.
-2. In Postman, create a request and choose its method (GET, POST, PUT, or DELETE).
-3. Use the corresponding URL and JSON body above. Add `Content-Type: application/json` to POST and PUT requests.
-4. Send the POST request first and copy the returned `_id`.
-5. Use that ID in the GET-by-ID, PUT, and DELETE URLs. Send GET all at any time to view the current notes.
+1. Start MongoDB (locally or through Atlas), configure all values in `.env`, and start the API with `npm start`.
+2. Import `postman/Skillpilot Notes API.postman_collection.json`.
+3. Set the collection variables `username` and `password` to the `.env` values for `AUTH_USERNAME` and `AUTH_PASSWORD`.
+4. Run **Authentication > Get access token**. On success, its test script saves the returned JWT to the collection's `token` variable.
+5. Use the authenticated requests in **Notes**. Send **Create a note** first and copy its returned `_id` into the `noteId` collection variable for the get-one, update, and delete requests.
 6. Confirm each HTTP status and JSON response matches the examples.
+
+To use individual Postman requests, set their Authorization type to **Bearer Token** and provide the token returned by the login endpoint. Tokens expire after one hour; run the login request again to retrieve a fresh token.
 
 If the server cannot connect to MongoDB, check that MongoDB is running and that `MONGODB_URI` in `.env` is correct. The server reports startup connection failures in the terminal and does not start listening without a database connection.
