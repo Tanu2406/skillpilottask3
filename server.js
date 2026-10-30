@@ -9,6 +9,14 @@ const notesRouter = require('./routes/notes');
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.CLIENT_ORIGIN || 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+});
+
 app.use('/api/notes', authenticateToken);
 app.use(express.json({ limit: '1mb' }));
 app.use('/api/auth', authRouter);
